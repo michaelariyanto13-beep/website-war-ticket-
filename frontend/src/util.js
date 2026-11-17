@@ -52,8 +52,15 @@ export function dateParts(iso) {
   };
 }
 
-export function statusOf(e) {
+/** true bila war dijadwalkan dan jam bukanya belum tiba. */
+export const isUpcoming = (e, now = Date.now()) => Boolean(e.open_at) && new Date(e.open_at).getTime() > now;
+
+export const fmtOpenAt = (iso) =>
+  new Date(iso).toLocaleString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+export function statusOf(e, now) {
   if (!e.is_open) return { label: 'Ditutup', cls: 'closed' };
+  if (isUpcoming(e, now)) return { label: 'Segera dibuka', cls: 'soon' };
   if (e.is_full) return { label: 'Penuh', cls: 'full' };
   return { label: 'Dibuka', cls: 'open' };
 }

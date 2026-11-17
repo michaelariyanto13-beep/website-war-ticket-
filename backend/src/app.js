@@ -60,7 +60,7 @@ const noStore = (_req, res, next) => { res.set('Cache-Control', 'no-store'); nex
 
 const shape = (e) => {
   const registered = e.registered_count ?? 0;
-  return { ...e, registered, is_full: e.quota !== null && registered >= e.quota };
+  return { ...e, registered, is_full: e.quota !== null && registered >= e.quota, open_at: e.open_at ?? null };
 };
 
 // Cache definisi form per instance (hemat 1 query di jalur pendaftaran).
@@ -75,13 +75,13 @@ async function getEventFields(id) {
 }
 
 app.get('/', (_req, res) => res.json({ ok: true, service: 'war-ticket-api' }));
-app.get('/api/health', noStore, (_req, res) => res.json({ ok: true }));
+app.get('/api/health', noStore, (_req, res) => res.json({ ok: true, now: Date.now() }));
 
 // ---------- PUBLIC ----------
 app.get('/api/events', wrap(async (_req, res) => {
   const { data, error } = await supabase
     .from('events')
-    .select('id,title,event_date,location,quota,is_open,registered_count,created_at')
+    .select('id,title,event_date,location,quota,is_open,open_at,registered_count,created_at')
     .order('event_date', { ascending: true, nullsFirst: false });
   if (error) throw error;
   edgeCache(res);
@@ -91,7 +91,7 @@ app.get('/api/events', wrap(async (_req, res) => {
 app.get('/api/events/:id', checkId, wrap(async (req, res) => {
   const { data, error } = await supabase
     .from('events')
-    .select('id,title,description,event_date,location,quota,is_open,fields,registered_count,full_message')
+    .select('id,title,description,event_date,location,quota,is_open,open_at,fields,registered_count,full_message')
     .eq('id', req.params.id).maybeSingle();
   if (error) throw error;
   if (!data) return res.status(404).json({ error: 'Event tidak ditemukan' });
@@ -116,6 +116,7 @@ app.post('/api/events/:id/register', noStore, registerLimiter, checkId, smallJso
     const map = {
       FULL: [409, 'Maaf, kuota war sudah penuh'],
       CLOSED: [409, 'Pendaftaran sudah ditutup'],
+      NOT_YET: [409, 'War belum dibuka, tunggu hitung mundurnya selesai'],
       NOT_FOUND: [404, 'Event tidak ditemukan'],
     };
     const [status, msg] = map[result.code] || [400, 'Gagal mendaftar'];

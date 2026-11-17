@@ -33,6 +33,18 @@ async function request(method, path, body, auth = false) {
   return data;
 }
 
+// Selisih jam HP/laptop pengunjung vs server (ms), agar hitung mundur buka war akurat.
+let offsetPromise;
+export const clockOffset = () => (offsetPromise ??= (async () => {
+  try {
+    const t0 = Date.now();
+    const r = await fetch(`${BASE}/api/health`, { cache: 'no-store' });
+    const { now } = await r.json();
+    const t1 = Date.now();
+    return typeof now === 'number' ? now - (t0 + t1) / 2 : 0;
+  } catch { return 0; }
+})());
+
 export const api = {
   // public
   listEvents: () => request('GET', '/events'),

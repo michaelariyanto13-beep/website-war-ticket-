@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { dateParts, gradientFor, statusOf } from '../util.js';
+import { dateParts, fmtOpenAt, gradientFor, statusOf } from '../util.js';
 import SlotBar from '../components/SlotBar.jsx';
 
 export default function AdminDashboard() {
@@ -22,7 +22,7 @@ export default function AdminDashboard() {
   if (!events) return <p className="a-sub">{error || 'Memuat…'}</p>;
 
   const totalReg = events.reduce((n, e) => n + e.registered, 0);
-  const active = events.filter((e) => e.is_open && !e.is_full).length;
+  const active = events.filter((e) => statusOf(e).cls === 'open').length;
 
   return (
     <>
@@ -64,7 +64,8 @@ export default function AdminDashboard() {
                   <h3>{e.title}</h3>
                   <span className={`a-pill ${s.cls}`}>{s.label}</span>
                 </div>
-                <p className="a-sub">{dp ? `${dp.time} WIB` : 'Jadwal belum ditentukan'}{e.location && ` · ${e.location}`}</p>
+                <p className="a-sub">{dp ? `${dp.time} WIB` : 'Jadwal belum ditentukan'}{e.location && ` · ${e.location}`}
+                  {s.cls === 'soon' && <> · ⏰ War dibuka {fmtOpenAt(e.open_at)} WIB</>}</p>
                 <SlotBar registered={e.registered} quota={e.quota} />
               </div>
               <div className="a-row-actions">

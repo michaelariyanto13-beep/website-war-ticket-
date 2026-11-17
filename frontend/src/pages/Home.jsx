@@ -7,6 +7,7 @@ import EventCard from '../components/EventCard.jsx';
 const TABS = [
   { key: 'all', label: 'Semua' },
   { key: 'open', label: 'Sedang dibuka' },
+  { key: 'soon', label: 'Segera dibuka' },
   { key: 'done', label: 'Penuh / Ditutup' },
 ];
 
@@ -20,7 +21,10 @@ export default function Home() {
   const shown = useMemo(() => {
     if (!events) return [];
     if (tab === 'all') return events;
-    return events.filter((e) => (statusOf(e).cls === 'open') === (tab === 'open'));
+    return events.filter((e) => {
+      const c = statusOf(e).cls;
+      return tab === 'done' ? c === 'full' || c === 'closed' : c === tab;
+    });
   }, [events, tab]);
 
   const openCount = events?.filter((e) => statusOf(e).cls === 'open').length ?? 0;

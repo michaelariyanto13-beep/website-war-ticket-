@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 
-export default function Countdown({ to }) {
-  const [now, setNow] = useState(Date.now());
+export default function Countdown({ to, offset = 0, doneText = '🏁 Event sudah dimulai' }) {
+  const [now, setNow] = useState(Date.now() + offset);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    setNow(Date.now() + offset);
+    const t = setInterval(() => setNow(Date.now() + offset), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [offset]);
   if (!to) return null;
   let diff = new Date(to).getTime() - now;
-  if (diff <= 0) return <div className="w-count done">🏁 Event sudah dimulai</div>;
+  if (diff <= 0) return <div className="w-count done">{doneText}</div>;
   const d = Math.floor(diff / 86400000); diff %= 86400000;
   const h = Math.floor(diff / 3600000); diff %= 3600000;
   const m = Math.floor(diff / 60000);

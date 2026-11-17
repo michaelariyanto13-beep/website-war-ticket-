@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { newFieldId, toLocalInput } from '../util.js';
+import { fmtOpenAt, newFieldId, toLocalInput } from '../util.js';
 import RichEditor from '../components/RichEditor.jsx';
 
 const TYPES = [
@@ -17,6 +17,7 @@ const isChoice = (t) => ['select', 'radio', 'checkbox'].includes(t);
 
 const blank = () => ({
   title: '', description: '', full_message: '', location: '', event_date: '', quota: '', is_open: true,
+  open_mode: 'now', open_at: '',
   fields: [
     { id: newFieldId(), label: 'Nama lengkap', type: 'text', required: true, options: [] },
     { id: newFieldId(), label: 'Email', type: 'email', required: true, options: [] },
@@ -38,6 +39,8 @@ export default function AdminEventForm() {
       setForm({
         ...event,
         event_date: toLocalInput(event.event_date),
+        open_mode: event.open_at && new Date(event.open_at) > new Date() ? 'later' : 'now',
+        open_at: event.open_at && new Date(event.open_at) > new Date() ? toLocalInput(event.open_at) : '',
         quota: event.quota ?? '',
         full_message: event.full_message ?? '',
         fields: event.fields.map((f) => ({ options: [], ...f })),
@@ -59,10 +62,17 @@ export default function AdminEventForm() {
 
   const submit = async (e) => {
     e.preventDefault();
-    setBusy(true);
     setError('');
+    if (form.open_mode === 'later' && !form.open_at) {
+      setError('Isi tanggal & jam war dibuka, atau pilih "Sekarang"');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setBusy(true);
+    const { open_mode: _mode, ...rest } = form;
     const payload = {
-      ...form,
+      ...rest,
+      open_at: form.open_mode === 'later' ? new Date(form.open_at).toISOString() : null,
       quota: form.quota === '' ? null : Number(form.quota),
       event_date: form.event_date ? new Date(form.event_date).toISOString() : null,
       fields: form.fields.map((f) => ({
@@ -180,6 +190,23 @@ export default function AdminEventForm() {
             <div className="field">
               <label>Limit peserta war</label>
               <input type="number" min="1" value={form.quota} onChange={(e) => set('quota', e.target.value)} placeholder="Kosong = tanpa batas" />
+            </div>
+            <div className="field">
+              <label>War dibuka</label>
+              <div className="a-seg two">
+                <button type="button" className={form.open_mode === 'now' ? 'on' : ''} onClick={() => set('open_mode', 'now')}>⚡ Sekarang</button>
+                <button type="button" className={form.open_mode === 'later' ? 'on' : ''} onClick={() => set('open_mode', 'later')}>⏰ Jadwalkan</button>
+              </div>
+              {form.open_mode === 'later' && (
+                <>
+                  <input type="datetime-local" style={{ marginTop: '.5rem' }} value={form.open_at} onChange={(e) => set('open_at', e.target.value)} />
+                  <small className="a-hint">
+                    {form.open_at
+                      ? `Formulir otomatis terbuka ${fmtOpenAt(new Date(form.open_at).toISOString())} WIB. Sebelumnya peserta melihat hitung mundur.`
+                      : 'Pilih tanggal & jam war mulai.'}
+                  </small>
+                </>
+              )}
             </div>
             <label className="a-switch">
               <input type="checkbox" checked={form.is_open} onChange={(e) => set('is_open', e.target.checked)} />

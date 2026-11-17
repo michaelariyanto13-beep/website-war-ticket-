@@ -32,6 +32,13 @@ export function validateEventInput(body) {
     event_date = d.toISOString();
   }
 
+  let open_at = null;
+  if (body.open_at) {
+    const d = new Date(body.open_at);
+    if (Number.isNaN(d.getTime())) return { error: 'Jadwal buka war tidak valid' };
+    open_at = d.toISOString();
+  }
+
   if (!Array.isArray(body.fields)) return { error: 'fields harus array' };
   if (body.fields.length > 30) return { error: 'Maksimal 30 isian' };
   const seen = new Set();
@@ -60,6 +67,7 @@ export function validateEventInput(body) {
       location: str(body.location),
       event_date,
       quota,
+      open_at,
       is_open: body.is_open !== false,
       fields,
     },

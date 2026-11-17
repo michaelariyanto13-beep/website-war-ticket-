@@ -12,9 +12,9 @@ npm run dev:web             # Web  → http://localhost:5173
 
 ## Database (Supabase → SQL Editor)
 
-- Database baru: jalankan `supabase/schema.sql`, `migration-002-performa-keamanan.sql`, `migration-003-pesan-slot-penuh.sql`, lalu `migration-004-tiket-qr-kehadiran.sql`.
+- Database baru: jalankan `supabase/schema.sql`, `migration-002-performa-keamanan.sql`, `migration-003-pesan-slot-penuh.sql`, `migration-004-tiket-qr-kehadiran.sql`, lalu `migration-005-jadwal-buka-war.sql`.
 - Database lama: jalankan `supabase/migration-002-performa-keamanan.sql` (jika belum).
-- Lalu jalankan `supabase/migration-003-pesan-slot-penuh.sql`, kemudian `supabase/migration-004-tiket-qr-kehadiran.sql`.
+- Lalu jalankan `supabase/migration-003-pesan-slot-penuh.sql`, kemudian `supabase/migration-004-tiket-qr-kehadiran.sql` dan `supabase/migration-005-jadwal-buka-war.sql`.
 
 ## Deploy ke Vercel
 

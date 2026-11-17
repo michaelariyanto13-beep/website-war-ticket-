@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, clockOffset } from '../api.js';
 import { usePolling } from '../usePolling.js';
-import { dateParts, fmtDate, gradientFor, statusOf, toHtml } from '../util.js';
+import { dateParts, fmtDate, fmtOpenAt, gradientFor, isUpcoming, statusOf, toHtml } from '../util.js';
 import SlotBar from '../components/SlotBar.jsx';
 import Countdown from '../components/Countdown.jsx';
 import RichContent from '../components/RichContent.jsx';
@@ -97,6 +97,19 @@ export default function EventPage() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
   const [loadError, setLoadError] = useState('');
+  const [offset, setOffset] = useState(0);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => { clockOffset().then(setOffset); }, []);
+  // Jam (disinkronkan ke server) berdetak tiap detik → form muncul tepat saat war dibuka
+  const openAt = event?.open_at;
+  useEffect(() => {
+    if (!openAt) return undefined;
+    const tick = () => setNow(Date.now() + offset);
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [openAt, offset]);
 
   const load = () => api.getEvent(id).then((d) => { setEvent(d); setLoadError(''); }).catch((e) => setLoadError(e.message));
   usePolling(load, 7000, [id], !done); // kuota live, berhenti setelah berhasil daftar
@@ -104,9 +117,10 @@ export default function EventPage() {
   if (loadError && !event) return <div className="w-wrap"><p className="alert error">{loadError}</p></div>;
   if (!event) return <div className="w-wrap"><div className="w-skel tall" /></div>;
 
-  const s = statusOf(event);
+  const s = statusOf(event, now);
   const dp = dateParts(event.event_date);
-  const canRegister = event.is_open && !event.is_full;
+  const upcoming = event.is_open && isUpcoming(event, now);
+  const canRegister = event.is_open && !event.is_full && !upcoming;
 
   const set = (fid, v) => setAnswers((a) => ({ ...a, [fid]: v }));
   const toggle = (fid, opt) => {
@@ -162,7 +176,14 @@ export default function EventPage() {
           <div className="w-panel sticky">
             <SlotBar registered={event.registered} quota={event.quota} big />
 
-            {canRegister ? (
+            {upcoming ? (
+              <div className="w-closed w-soon-box">
+                <div>⏰</div>
+                <b>War dibuka {fmtOpenAt(event.open_at)} WIB</b>
+                <Countdown to={event.open_at} offset={offset} doneText="⚡ War dibuka!" />
+                <p className="w-sub small">Formulir otomatis muncul saat hitung mundur selesai. Biarkan halaman ini tetap terbuka.</p>
+              </div>
+            ) : canRegister ? (
               <form onSubmit={submit} className="w-form">
                 <h2>Formulir pendaftaran</h2>
                 {event.fields.length === 0 && <p className="w-sub small">Tidak ada isian, langsung klik daftar.</p>}
