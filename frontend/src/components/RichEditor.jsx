@@ -114,7 +114,12 @@ function Toolbar({ editor }) {
   );
 }
 
-export default function RichEditor({ value, onChange }) {
+export default function RichEditor({
+  value,
+  onChange,
+  compact = false,
+  placeholder = 'Tulis informasi event di sini — syarat, rute, jadwal, racepack, dll…',
+}) {
   const editor = useEditor({
     shouldRerenderOnTransaction: true, // v3 default false → toolbar perlu tahu status aktif
     extensions: [
@@ -126,7 +131,7 @@ export default function RichEditor({ value, onChange }) {
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Image,
-      Placeholder.configure({ placeholder: 'Tulis informasi event di sini — syarat, rute, jadwal, racepack, dll…' }),
+      Placeholder.configure({ placeholder }),
     ],
     content: toHtml(value),
     editorProps: { attributes: { class: 'doc-content' } },
@@ -134,7 +139,7 @@ export default function RichEditor({ value, onChange }) {
   });
 
   return (
-    <div className="re">
+    <div className={`re ${compact ? 'compact' : ''}`}>
       <Toolbar editor={editor} />
       <div className="re-paper-wrap">
         <div className="re-paper"><EditorContent editor={editor} /></div>

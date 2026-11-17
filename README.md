@@ -12,8 +12,9 @@ npm run dev:web             # Web  → http://localhost:5173
 
 ## Database (Supabase → SQL Editor)
 
-- Database baru: jalankan `supabase/schema.sql`, lalu `supabase/migration-002-performa-keamanan.sql`.
-- Database lama: cukup jalankan `supabase/migration-002-performa-keamanan.sql`.
+- Database baru: jalankan `supabase/schema.sql`, `migration-002-performa-keamanan.sql`, lalu `migration-003-pesan-slot-penuh.sql`.
+- Database lama: jalankan `supabase/migration-002-performa-keamanan.sql` (jika belum).
+- Lalu jalankan `supabase/migration-003-pesan-slot-penuh.sql`.
 
 ## Deploy ke Vercel
 

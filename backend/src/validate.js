@@ -14,6 +14,9 @@ export function validateEventInput(body) {
   const description = sanitizeRich(body.description);
   if (description.length > 120000) return { error: 'Deskripsi terlalu panjang' };
 
+  const full_message = sanitizeRich(body.full_message);
+  if (full_message.length > 50000) return { error: 'Pesan slot penuh terlalu panjang' };
+
   let quota = null;
   if (body.quota !== null && body.quota !== undefined && body.quota !== '') {
     quota = Number(body.quota);
@@ -51,6 +54,7 @@ export function validateEventInput(body) {
     value: {
       title,
       description,
+      full_message,
       location: str(body.location),
       event_date,
       quota,

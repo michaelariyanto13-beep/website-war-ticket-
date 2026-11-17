@@ -15,7 +15,7 @@ const TYPES = [
 const isChoice = (t) => ['select', 'radio', 'checkbox'].includes(t);
 
 const blank = () => ({
-  title: '', description: '', location: '', event_date: '', quota: '', is_open: true,
+  title: '', description: '', full_message: '', location: '', event_date: '', quota: '', is_open: true,
   fields: [
     { id: newFieldId(), label: 'Nama lengkap', type: 'text', required: true, options: [] },
     { id: newFieldId(), label: 'Nomor WhatsApp', type: 'text', required: true, options: [] },
@@ -37,6 +37,7 @@ export default function AdminEventForm() {
         ...event,
         event_date: toLocalInput(event.event_date),
         quota: event.quota ?? '',
+        full_message: event.full_message ?? '',
         fields: event.fields.map((f) => ({ options: [], ...f })),
       })
     ).catch((e) => setError(e.message));
@@ -144,6 +145,25 @@ export default function AdminEventForm() {
                 </div>
               </div>
             ))}
+          </section>
+
+          <section className="a-card">
+            <div className="a-card-head">
+              <div>
+                <h2>😵 Pesan saat slot penuh</h2>
+                <p className="a-sub">
+                  Begitu kuota habis, formulir otomatis hilang dan peserta melihat pesan ini.
+                  Kosongkan untuk memakai pesan standar.
+                </p>
+              </div>
+              {form.quota === '' && <span className="a-pill closed">Tanpa limit — pesan ini tidak akan tampil</span>}
+            </div>
+            <RichEditor
+              compact
+              value={form.full_message}
+              onChange={(v) => set('full_message', v)}
+              placeholder="Mis. Terima kasih! Slot war sudah habis. Gabung grup WA untuk info slot tambahan / waiting list…"
+            />
           </section>
         </div>
 

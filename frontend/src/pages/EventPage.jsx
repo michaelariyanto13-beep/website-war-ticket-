@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { usePolling } from '../usePolling.js';
-import { dateParts, fmtDate, gradientFor, statusOf } from '../util.js';
+import { dateParts, fmtDate, gradientFor, statusOf, toHtml } from '../util.js';
 import SlotBar from '../components/SlotBar.jsx';
 import Countdown from '../components/Countdown.jsx';
 import RichContent from '../components/RichContent.jsx';
@@ -164,7 +164,11 @@ export default function EventPage() {
               <div className="w-closed">
                 <div>{event.is_full ? '😵' : '🔒'}</div>
                 <b>{event.is_full ? 'Kuota war sudah penuh' : 'Pendaftaran ditutup'}</b>
-                <p className="w-sub small">Pantau event lainnya agar tidak ketinggalan.</p>
+                {event.is_full && event.full_message ? (
+                  <div className="w-full-msg doc-content" dangerouslySetInnerHTML={{ __html: toHtml(event.full_message) }} />
+                ) : (
+                  <p className="w-sub small">Pantau event lainnya agar tidak ketinggalan.</p>
+                )}
                 <Link to="/" className="w-btn ghost">Lihat event lain</Link>
               </div>
             )}

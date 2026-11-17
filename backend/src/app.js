@@ -84,12 +84,14 @@ app.get('/api/events', wrap(async (_req, res) => {
 app.get('/api/events/:id', checkId, wrap(async (req, res) => {
   const { data, error } = await supabase
     .from('events')
-    .select('id,title,description,event_date,location,quota,is_open,fields,registered_count')
+    .select('id,title,description,event_date,location,quota,is_open,fields,registered_count,full_message')
     .eq('id', req.params.id).maybeSingle();
   if (error) throw error;
   if (!data) return res.status(404).json({ error: 'Event tidak ditemukan' });
+  const out = shape(data);
+  if (!out.is_full) delete out.full_message; // pesan hanya dikirim saat slot benar-benar habis
   edgeCache(res);
-  res.json(shape(data));
+  res.json(out);
 }));
 
 app.post('/api/events/:id/register', noStore, registerLimiter, checkId, smallJson, wrap(async (req, res) => {

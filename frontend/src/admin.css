@@ -187,3 +187,7 @@ body.admin .field > label { color: #b6c0da; font-size: .85rem; }
   .a-row-actions { justify-content: flex-start; width: 100%; }
   .re-paper { padding: 1.4rem 1.1rem; }
 }
+
+/* Editor ringkas (pesan slot penuh) */
+.re.compact .re-paper { min-height: 170px; padding: 1.6rem 1.8rem; }
+.re.compact .re-paper .ProseMirror { min-height: 120px; }
