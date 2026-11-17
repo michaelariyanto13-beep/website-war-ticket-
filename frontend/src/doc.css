@@ -1,0 +1,23 @@
+/* Tipografi dokumen — dipakai bersama oleh editor admin & tampilan user (WYSIWYG) */
+.doc-content { font-family: 'Inter', system-ui, sans-serif; font-size: 1.02rem; line-height: 1.8; color: #232733; word-wrap: break-word; }
+.doc-content > :first-child { margin-top: 0; }
+.doc-content > :last-child { margin-bottom: 0; }
+.doc-content p { margin: 0 0 1rem; }
+.doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4 { font-family: 'Outfit', sans-serif; color: #12151f; line-height: 1.2; letter-spacing: -.02em; scroll-margin-top: 90px; }
+.doc-content h1 { font-size: 2rem; font-weight: 800; margin: 2rem 0 .8rem; }
+.doc-content h2 { font-size: 1.5rem; font-weight: 700; margin: 1.8rem 0 .6rem; padding-bottom: .35rem; border-bottom: 2px solid #f1ebe3; }
+.doc-content h3 { font-size: 1.2rem; font-weight: 700; margin: 1.5rem 0 .4rem; }
+.doc-content a { color: #e0521a; text-decoration: underline; text-underline-offset: 3px; }
+.doc-content strong, .doc-content b { font-weight: 700; }
+.doc-content ul, .doc-content ol { margin: 0 0 1rem; padding-left: 1.5rem; }
+.doc-content li { margin: .25rem 0; }
+.doc-content li > p { margin: 0; }
+.doc-content ul li::marker { color: #ff6a2b; }
+.doc-content ol li::marker { color: #ff6a2b; font-weight: 700; }
+.doc-content blockquote { margin: 1.2rem 0; padding: .7rem 1.1rem; border-left: 4px solid #ff6a2b; background: #fff4ec; border-radius: 0 12px 12px 0; color: #4a3b32; }
+.doc-content blockquote p:last-child { margin-bottom: 0; }
+.doc-content hr { border: 0; height: 2px; background: linear-gradient(90deg, #ff6a2b, transparent); margin: 2rem 0; }
+.doc-content img { max-width: 100%; height: auto; border-radius: 14px; margin: .8rem 0; display: block; box-shadow: 0 6px 24px rgba(20, 24, 40, .15); }
+.doc-content mark { padding: .05em .25em; border-radius: 4px; }
+.doc-content code { background: #f3efe9; padding: .1em .35em; border-radius: 5px; font-size: .92em; }
+.doc-content img.ProseMirror-selectednode { outline: 3px solid #ff6a2b; }
