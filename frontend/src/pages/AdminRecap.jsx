@@ -32,6 +32,15 @@ export default function AdminRecap() {
   const load = () => api.recap(id).then(setData).catch((e) => setError(e.message));
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-refresh: peserta yang di-scan (di HP/tab lain) langsung tercentang hadir
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState === 'visible') api.recap(id).then(setData).catch(() => {}); };
+    const t = setInterval(tick, 5000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(t); window.removeEventListener('focus', tick); document.removeEventListener('visibilitychange', tick); };
+  }, [id]);
+
   const rows = data?.registrations ?? [];
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();

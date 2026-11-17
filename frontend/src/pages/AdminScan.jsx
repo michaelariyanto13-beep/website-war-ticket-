@@ -38,6 +38,9 @@ export default function AdminScan() {
   const [manual, setManual] = useState('');
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState([]);
+  const [flash, setFlash] = useState(null); // popup hasil di atas kamera
+  const flashTimer = useRef(null);
+  const resultRef = useRef(null);
 
   const scanner = useRef(null);
   const lastScan = useRef({ text: '', at: 0 });
@@ -47,25 +50,34 @@ export default function AdminScan() {
 
   useEffect(() => { api.adminEvents().then(setEvents).catch(() => {}); }, []);
 
+  const show = useCallback((r) => {
+    setResult(r);
+    beep(r.status === 'ok');
+    setLog((l) => [{ ...r, at: Date.now() }, ...l].slice(0, 15));
+    setFlash(r);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 3000);
+    // Di HP kartu hasil ada di bawah kamera — pastikan terlihat
+    if (window.matchMedia('(max-width: 960px)').matches) {
+      requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+    }
+  }, []);
+
   const check = useCallback(async (text) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
+    setFlash({ status: 'checking' });
+    clearTimeout(flashTimer.current);
     try {
-      const r = await api.checkin(text, eventRef.current || undefined);
-      setResult(r);
-      beep(r.status === 'ok');
-      setLog((l) => [{ ...r, at: Date.now() }, ...l].slice(0, 15));
+      show(await api.checkin(text, eventRef.current || undefined));
     } catch (e) {
-      const r = { status: e.data?.status || 'error', error: e.message, ...e.data };
-      setResult(r);
-      beep(false);
-      setLog((l) => [{ ...r, at: Date.now() }, ...l].slice(0, 15));
+      show({ ...e.data, status: e.data?.status || 'error', error: e.message });
     } finally {
       busyRef.current = false;
       setBusy(false);
     }
-  }, []);
+  }, [show]);
 
   const onDecoded = useCallback((text) => {
     const now = Date.now();
@@ -79,7 +91,11 @@ export default function AdminScan() {
     setCamError('');
     try {
       if (!scanner.current) {
-        scanner.current = new Html5Qrcode(READER_ID, { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], verbose: false });
+        scanner.current = new Html5Qrcode(READER_ID, {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          verbose: false,
+        });
       }
       await scanner.current.start(
         { facingMode: 'environment' },
@@ -102,7 +118,7 @@ export default function AdminScan() {
     setRunning(false);
   };
 
-  useEffect(() => () => { stop(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { stop(); clearTimeout(flashTimer.current); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitManual = (e) => {
     e.preventDefault();
@@ -112,6 +128,11 @@ export default function AdminScan() {
   const st = result ? STATUS[result.status] || STATUS.error : null;
   const fields = result?.event?.fields || [];
   const reg = result?.registration;
+  const fst = flash && (flash.status === 'checking' ? { cls: 'busy', icon: '⏳', title: 'Memeriksa tiket…' } : STATUS[flash.status] || STATUS.error);
+  const flashName = (() => {
+    const f = (flash?.event?.fields || []).find((x) => x.type === 'text');
+    return f ? flash.registration?.answers?.[f.id] : '';
+  })();
 
   return (
     <>
@@ -129,6 +150,16 @@ export default function AdminScan() {
       <div className="a-scan">
         <div className="a-card a-scan-cam">
           <div id={READER_ID} className={`a-reader ${running ? 'on' : ''}`} />
+          {fst && (
+            <div className={`a-flash ${fst.cls}`} onClick={() => setFlash(null)}>
+              <span>{fst.icon}</span>
+              <b>{fst.title}</b>
+              {flash.registration && (
+                <small>#{String(flash.registration.ticket_no ?? '').padStart(3, '0')} {flashName || ''}</small>
+              )}
+              {flash.error && flash.status !== 'ok' && <small>{flash.error}</small>}
+            </div>
+          )}
           {!running && (
             <div className="a-reader-idle">
               <div>📷</div>
@@ -148,7 +179,7 @@ export default function AdminScan() {
         </div>
 
         <div className="a-scan-side">
-          <div className={`a-card a-result ${st ? st.cls : 'idle'}`}>
+          <div ref={resultRef} className={`a-card a-result ${st ? st.cls : 'idle'}`}>
             {!st && <p className="a-sub">Hasil scan akan muncul di sini.</p>}
             {st && (
               <>

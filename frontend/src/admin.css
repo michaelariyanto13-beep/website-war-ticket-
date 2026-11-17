@@ -290,6 +290,14 @@ body.admin .field > label { color: #b6c0da; font-size: .85rem; }
 .a-reader-idle p { margin: 0; }
 .a-scan-ctrl { margin-top: 1rem; }
 .a-manual { display: flex; gap: .5rem; margin-top: .8rem; }
+.a-flash { position: absolute; left: 50%; top: 1rem; transform: translateX(-50%); z-index: 5; width: calc(100% - 2rem); max-width: 360px; display: grid; justify-items: center; gap: .2rem; text-align: center; padding: .9rem 1rem; border-radius: 14px; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.45); animation: pop .3s cubic-bezier(.2,1.6,.4,1); cursor: pointer; }
+.a-flash span { font-size: 2.2rem; line-height: 1; }
+.a-flash b { font-family: 'Outfit', sans-serif; font-size: 1.15rem; }
+.a-flash small { font-size: .85rem; opacity: .92; }
+.a-flash.ok { background: rgba(34,150,70,.95); }
+.a-flash.warn { background: rgba(190,130,10,.95); }
+.a-flash.bad { background: rgba(200,40,80,.95); }
+.a-flash.busy { background: rgba(20,28,48,.92); }
 .a-result { min-height: 180px; transition: border-color .2s, background .2s; }
 .a-result.idle { display: grid; place-items: center; }
 .a-result.ok { border-color: rgba(127,211,107,.5); background: linear-gradient(160deg, rgba(127,211,107,.14), var(--card) 60%); }
