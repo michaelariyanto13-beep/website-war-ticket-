@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-r
 import { getToken } from './api.js';
 import Home from './pages/Home.jsx';
 import EventPage from './pages/EventPage.jsx';
+import TicketPage from './pages/TicketPage.jsx';
 
 // Halaman admin (termasuk editor) dimuat terpisah → pengunjung war hanya unduh bundle kecil
 const AdminLogin = lazy(() => import('./pages/AdminLogin.jsx'));
@@ -10,6 +11,7 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard.jsx'));
 const AdminEventForm = lazy(() => import('./pages/AdminEventForm.jsx'));
 const AdminRecap = lazy(() => import('./pages/AdminRecap.jsx'));
 const AdminLayout = lazy(() => import('./components/AdminLayout.jsx'));
+const AdminScan = lazy(() => import('./pages/AdminScan.jsx'));
 
 function RequireAdmin({ children }) {
   const navigate = useNavigate();
@@ -57,12 +59,14 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/event/:id" element={<EventPage />} />
+          <Route path="/ticket/:code" element={<TicketPage />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/events/new" element={<AdminEventForm />} />
             <Route path="/admin/events/:id/edit" element={<AdminEventForm />} />
             <Route path="/admin/events/:id/recap" element={<AdminRecap />} />
+            <Route path="/admin/scan" element={<AdminScan />} />
           </Route>
           <Route path="*" element={<p style={{ padding: '2rem' }}>Halaman tidak ditemukan.</p>} />
         </Routes>

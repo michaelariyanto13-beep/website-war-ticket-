@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { usePolling } from '../usePolling.js';
@@ -6,6 +6,7 @@ import { dateParts, fmtDate, gradientFor, statusOf, toHtml } from '../util.js';
 import SlotBar from '../components/SlotBar.jsx';
 import Countdown from '../components/Countdown.jsx';
 import RichContent from '../components/RichContent.jsx';
+import TicketQR from '../components/TicketQR.jsx';
 
 function Confetti() {
   const bits = useMemo(
@@ -21,6 +22,69 @@ function Confetti() {
       {bits.map((b, i) => (
         <i key={i} style={{ left: `${b.left}%`, animationDelay: `${b.delay}s`, animationDuration: `${b.dur}s`, background: `hsl(${b.hue} 95% 60%)`, transform: `rotate(${b.rot}deg)` }} />
       ))}
+    </div>
+  );
+}
+
+function EmailStatus({ state, to, onRetry }) {
+  const map = {
+    sending: ['⏳', 'Mengirim tiket ke email kamu…'],
+    sent: ['📧', `Tiket QR sudah dikirim ke ${to}. Cek juga folder Spam/Promosi.`],
+    failed: ['⚠️', 'Email gagal terkirim. Screenshot QR ini sebagai tiket kamu.'],
+    disabled: ['📸', 'Screenshot QR ini — tunjukkan ke panitia saat registrasi ulang.'],
+    none: ['📸', 'Screenshot QR ini — tunjukkan ke panitia saat registrasi ulang.'],
+  };
+  const [icon, text] = map[state] || map.none;
+  return (
+    <div className={`w-mail ${state}`}>
+      <span>{icon}</span>
+      <p>{text}</p>
+      {state === 'failed' && <button type="button" className="w-btn ghost sm" onClick={onRetry}>Coba kirim lagi</button>}
+    </div>
+  );
+}
+
+function SuccessView({ event, done, answers }) {
+  const dp = dateParts(event.event_date);
+  const emailField = event.fields.find((f) => f.type === 'email');
+  const hasEmail = Boolean(emailField && answers[emailField.id]);
+  const [mail, setMail] = useState({ state: hasEmail ? 'sending' : 'none', to: '' });
+
+  const send = () => {
+    setMail({ state: 'sending', to: '' });
+    api.sendTicketEmail(done.ticket_code)
+      .then((r) => setMail(r.ok ? { state: 'sent', to: r.to || answers[emailField.id] } : { state: 'none', to: '' }))
+      .catch((e) => setMail({ state: e.code === 'MAIL_DISABLED' ? 'disabled' : 'failed', to: '' }));
+  };
+  useEffect(() => { if (hasEmail) send(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="w-wrap w-success">
+      <Confetti />
+      <div className="w-check">✓</div>
+      <h1>Slot berhasil diamankan!</h1>
+      <p className="w-sub">Kamu resmi terdaftar. Sampai jumpa di garis start 🏃</p>
+      <div className="w-ticket">
+        <div className="w-ticket-top" style={{ background: gradientFor(event.id) }}>
+          <span>TIKET PESERTA</span>
+          <h3>{event.title}</h3>
+        </div>
+        <div className="w-ticket-qr">
+          <TicketQR code={done.ticket_code} size={220} />
+          <b>#{String(done.position).padStart(3, '0')}</b>
+          <small>Tunjukkan QR ini ke panitia saat registrasi ulang</small>
+        </div>
+        <div className="w-ticket-body">
+          <div><label>Tanggal</label><b>{dp ? `${dp.day} ${dp.mon} ${dp.year}` : '—'}</b></div>
+          <div><label>Jam</label><b>{dp ? `${dp.time} WIB` : '—'}</b></div>
+          <div className="span2"><label>Lokasi</label><b>{event.location || '—'}</b></div>
+        </div>
+      </div>
+      <EmailStatus state={mail.state} to={mail.to} onRetry={send} />
+      <div className="w-success-actions">
+        <Link to={`/ticket/${done.ticket_code}`} className="w-btn">Buka tiket online</Link>
+        <Link to="/" className="w-btn ghost">Lihat event lain</Link>
+      </div>
     </div>
   );
 }
@@ -64,30 +128,7 @@ export default function EventPage() {
     }
   };
 
-  if (done) {
-    return (
-      <div className="w-wrap w-success">
-        <Confetti />
-        <div className="w-check">✓</div>
-        <h1>Slot berhasil diamankan!</h1>
-        <p className="w-sub">Kamu resmi terdaftar. Sampai jumpa di garis start 🏃</p>
-        <div className="w-ticket">
-          <div className="w-ticket-top" style={{ background: gradientFor(event.id) }}>
-            <span>TIKET PESERTA</span>
-            <h3>{event.title}</h3>
-          </div>
-          <div className="w-ticket-body">
-            <div><label>No. peserta</label><b>#{String(done.position).padStart(3, '0')}</b></div>
-            <div><label>Tanggal</label><b>{dp ? `${dp.day} ${dp.mon} ${dp.year}` : '—'}</b></div>
-            <div><label>Jam</label><b>{dp ? `${dp.time} WIB` : '—'}</b></div>
-            <div><label>Lokasi</label><b>{event.location || '—'}</b></div>
-          </div>
-        </div>
-        <p className="w-sub small">Screenshot tiket ini sebagai bukti pendaftaran.</p>
-        <Link to="/" className="w-btn">Lihat event lain</Link>
-      </div>
-    );
-  }
+  if (done) return <SuccessView event={event} done={done} answers={answers} />;
 
   return (
     <div className="w-wrap">
@@ -130,7 +171,14 @@ export default function EventPage() {
                     <label>{f.label}{f.required && <span className="req"> *</span>}</label>
                     {f.type === 'text' && <input value={answers[f.id] || ''} onChange={(e) => set(f.id, e.target.value)} />}
                     {f.type === 'textarea' && <textarea rows={3} value={answers[f.id] || ''} onChange={(e) => set(f.id, e.target.value)} />}
-                    {f.type === 'number' && <input type="number" inputMode="numeric" value={answers[f.id] ?? ''} onChange={(e) => set(f.id, e.target.value)} />}
+                    {f.type === 'email' && (
+                      <>
+                        <input type="email" inputMode="email" autoComplete="email" placeholder="nama@email.com"
+                          value={answers[f.id] || ''} onChange={(e) => set(f.id, e.target.value)} />
+                        <small className="w-hint">Tiket QR akan dikirim ke email ini</small>
+                      </>
+                    )}
+                    {f.type === 'number' &&<input type="number" inputMode="numeric" value={answers[f.id] ?? ''} onChange={(e) => set(f.id, e.target.value)} />}
                     {f.type === 'select' && (
                       <select value={answers[f.id] || ''} onChange={(e) => set(f.id, e.target.value)}>
                         <option value="">Pilih…</option>

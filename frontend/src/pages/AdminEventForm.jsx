@@ -8,6 +8,7 @@ const TYPES = [
   { value: 'text', label: 'Teks singkat (ketik)' },
   { value: 'textarea', label: 'Teks panjang (ketik)' },
   { value: 'number', label: 'Angka (ketik)' },
+  { value: 'email', label: 'Email (tiket QR dikirim ke sini)' },
   { value: 'select', label: 'Pilihan — dropdown' },
   { value: 'radio', label: 'Pilihan — pilih satu' },
   { value: 'checkbox', label: 'Pilihan — banyak' },
@@ -18,6 +19,7 @@ const blank = () => ({
   title: '', description: '', full_message: '', location: '', event_date: '', quota: '', is_open: true,
   fields: [
     { id: newFieldId(), label: 'Nama lengkap', type: 'text', required: true, options: [] },
+    { id: newFieldId(), label: 'Email', type: 'email', required: true, options: [] },
     { id: newFieldId(), label: 'Nomor WhatsApp', type: 'text', required: true, options: [] },
     { id: newFieldId(), label: 'Ukuran jersey', type: 'select', required: true, options: ['S', 'M', 'L', 'XL'] },
   ],
@@ -116,6 +118,9 @@ export default function AdminEventForm() {
               </button>
             </div>
             {form.fields.length === 0 && <p className="a-sub">Belum ada isian. Peserta cukup klik daftar.</p>}
+            {!form.fields.some((f) => f.type === 'email') && (
+              <p className="a-warn">📧 Belum ada isian bertipe <b>Email</b> — peserta tidak akan menerima tiket QR lewat email (QR tetap tampil di layar setelah daftar).</p>
+            )}
             {form.fields.map((f, i) => (
               <div className="a-field-item" key={f.id}>
                 <div className="a-field-num">{i + 1}</div>

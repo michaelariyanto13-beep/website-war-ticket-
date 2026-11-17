@@ -10,29 +10,102 @@ const csvCell = (v) => {
   if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return `"${s.replace(/"/g, '""')}"`;
 };
+const no = (r) => `#${String(r.ticket_no ?? '').padStart(3, '0')}`;
+const timeOnly = (iso) => new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+const FILTERS = [
+  { key: 'all', label: 'Semua' },
+  { key: 'in', label: 'Hadir' },
+  { key: 'out', label: 'Belum hadir' },
+];
 
 export default function AdminRecap() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [pending, setPending] = useState({}); // id baris yang sedang diproses
+  const [bulk, setBulk] = useState(false);
 
   const load = () => api.recap(id).then(setData).catch((e) => setError(e.message));
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = data?.registrations ?? [];
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) => Object.values(r.answers).some((v) => String(answerText(v)).toLowerCase().includes(s)));
-  }, [rows, q]);
+    return rows.filter((r) => {
+      if (filter === 'in' && !r.checked_in_at) return false;
+      if (filter === 'out' && r.checked_in_at) return false;
+      if (!s) return true;
+      return no(r).includes(s) || Object.values(r.answers).some((v) => String(answerText(v)).toLowerCase().includes(s));
+    });
+  }, [rows, q, filter]);
 
   if (!data) return <p className="a-sub">{error || 'Memuat…'}</p>;
   const { event } = data;
   const dp = dateParts(event.event_date);
   const s = statusOf({ ...event, is_full: event.quota !== null && rows.length >= event.quota });
   const left = event.quota === null ? '∞' : Math.max(0, event.quota - rows.length);
-  const pct = event.quota ? Math.min(100, Math.round((rows.length / event.quota) * 100)) : null;
+  const present = rows.filter((r) => r.checked_in_at).length;
+  const emailField = event.fields.find((f) => f.type === 'email');
+  const unsent = emailField ? rows.filter((r) => !r.email_sent_at && r.answers?.[emailField.id]).length : 0;
+
+  const patchRow = (row) => setData((d) => ({ ...d, registrations: d.registrations.map((r) => (r.id === row.id ? row : r)) }));
+  const withPending = async (rid, fn) => {
+    setPending((p) => ({ ...p, [rid]: true }));
+    setError(''); setNotice('');
+    try { await fn(); } catch (e) { setError(e.message); } finally { setPending((p) => ({ ...p, [rid]: false })); }
+  };
+
+  const toggleCheckin = (r) => withPending(r.id, async () => patchRow(await api.setCheckin(r.id, !r.checked_in_at)));
+  const resend = (r) => withPending(r.id, async () => {
+    const res = await api.resendEmail(r.id);
+    patchRow(res.registration);
+    setNotice(`Tiket ${no(r)} terkirim ke ${res.to}`);
+  });
+  const remove = (r) => {
+    if (!confirm(`Hapus pendaftar ${no(r)}? Slot akan kembali tersedia.`)) return;
+    withPending(r.id, async () => { await api.deleteRegistration(r.id); await load(); });
+  };
+
+  const sendPending = async () => {
+    setBulk(true); setError(''); setNotice('');
+    let sent = 0, failed = 0;
+    try {
+      // Diproses per batch kecil sampai antrean habis
+      for (let i = 0; i < 50; i++) {
+        const r = await api.emailPending(event.id);
+        sent += r.sent; failed += r.failed;
+        setNotice(`Mengirim… ${sent} terkirim${failed ? `, ${failed} gagal` : ''}, sisa ${r.remaining}`);
+        if (r.remaining === 0 || r.sent === 0) break;
+      }
+      setNotice(`Selesai: ${sent} email terkirim${failed ? `, ${failed} gagal (cek pengaturan SMTP)` : ''}.`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBulk(false);
+      load();
+    }
+  };
+
+  const exportCsv = () => {
+    const head = ['No. tiket', 'Waktu daftar', ...event.fields.map((f) => f.label), 'Kehadiran', 'Waktu check-in', 'Email terkirim'];
+    const lines = [head, ...rows.map((r) => [
+      no(r), fmtDateTime(r.created_at),
+      ...event.fields.map((f) => answerText(r.answers[f.id])),
+      r.checked_in_at ? 'Hadir' : 'Belum hadir',
+      r.checked_in_at ? fmtDateTime(r.checked_in_at) : '',
+      r.email_sent_at ? fmtDateTime(r.email_sent_at) : '',
+    ])];
+    const csv = '﻿' + lines.map((l) => l.map(csvCell).join(',')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `rekap-${event.title.replace(/[^\w-]+/g, '_')}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   const summaries = event.fields.filter((f) => f.options).map((f) => {
     const counts = Object.fromEntries(f.options.map((o) => [o, 0]));
@@ -42,22 +115,6 @@ export default function AdminRecap() {
     }
     return { field: f, counts };
   });
-
-  const exportCsv = () => {
-    const head = ['No', 'Waktu daftar', ...event.fields.map((f) => f.label)];
-    const lines = [head, ...rows.map((r, i) => [i + 1, fmtDateTime(r.created_at), ...event.fields.map((f) => answerText(r.answers[f.id]))])];
-    const csv = '﻿' + lines.map((l) => l.map(csvCell).join(',')).join('\r\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `rekap-${event.title.replace(/[^\w-]+/g, '_')}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
-  const remove = async (r) => {
-    if (!confirm('Hapus pendaftar ini? Slot akan kembali tersedia.')) return;
-    try { await api.deleteRegistration(r.id); load(); } catch (e) { setError(e.message); }
-  };
 
   return (
     <>
@@ -73,18 +130,32 @@ export default function AdminRecap() {
         <div className="actions">
           <button className="a-btn" onClick={load}>↻ Refresh</button>
           <Link className="a-btn" to={`/admin/events/${event.id}/edit`}>Edit</Link>
+          <Link className="a-btn" to={`/admin/scan?event=${event.id}`}>📷 Scan kehadiran</Link>
           <button className="a-btn primary" onClick={exportCsv} disabled={!rows.length}>⬇ Export CSV</button>
         </div>
       </div>
       {error && <p className="alert error">{error}</p>}
+      {notice && <p className="a-notice">{notice}</p>}
 
       <div className="a-kpis four">
         <div className="a-kpi"><span className="ic b">👟</span><div><b>{rows.length}</b><small>Terdaftar</small></div></div>
-        <div className="a-kpi"><span className="ic g">🎟</span><div><b>{left}</b><small>Slot tersisa</small></div></div>
-        <div className="a-kpi"><span className="ic">📈</span><div><b>{pct === null ? '—' : `${pct}%`}</b><small>Terisi</small></div></div>
-        <div className="a-kpi"><span className="ic">🎯</span><div><b>{event.quota ?? '∞'}</b><small>Limit war</small></div></div>
+        <div className="a-kpi"><span className="ic g">✅</span><div><b>{present}</b><small>Hadir{rows.length ? ` (${Math.round((present / rows.length) * 100)}%)` : ''}</small></div></div>
+        <div className="a-kpi"><span className="ic">⏳</span><div><b>{rows.length - present}</b><small>Belum hadir</small></div></div>
+        <div className="a-kpi"><span className="ic">🎟</span><div><b>{left}</b><small>Slot tersisa</small></div></div>
       </div>
       <div className="a-card"><SlotBar registered={rows.length} quota={event.quota} big /></div>
+
+      {emailField && unsent > 0 && (
+        <div className="a-card a-mailbar">
+          <div>
+            <b>📧 {unsent} peserta belum menerima email tiket</b>
+            <small>{data.mail_enabled ? 'Misal tab ditutup sebelum email terkirim, atau SMTP sempat gagal.' : 'SMTP belum dikonfigurasi — isi SMTP_* di Environment Variables.'}</small>
+          </div>
+          <button className="a-btn primary" onClick={sendPending} disabled={bulk || !data.mail_enabled}>
+            {bulk ? 'Mengirim…' : 'Kirim semua'}
+          </button>
+        </div>
+      )}
 
       {summaries.length > 0 && (
         <>
@@ -109,27 +180,57 @@ export default function AdminRecap() {
       <div className="a-card">
         <div className="a-card-head">
           <h2>Daftar peserta <span className="a-count">{filtered.length}</span></h2>
-          <input className="a-search" placeholder="🔍 Cari peserta…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="actions">
+            <div className="a-seg">
+              {FILTERS.map((f) => (
+                <button key={f.key} className={filter === f.key ? 'on' : ''} onClick={() => setFilter(f.key)}>{f.label}</button>
+              ))}
+            </div>
+            <input className="a-search" placeholder="🔍 Cari nama / no. tiket…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
         </div>
         <div className="a-table-wrap">
           <table className="a-table">
             <thead>
               <tr>
-                <th>#</th><th>Waktu daftar</th>
+                <th>No.</th>
+                <th>Kehadiran</th>
                 {event.fields.map((f) => <th key={f.id}>{f.label}</th>)}
+                <th>Daftar</th>
+                {emailField && <th>Email tiket</th>}
                 <th />
               </tr>
             </thead>
             <tbody>
               {filtered.map((r) => (
-                <tr key={r.id}>
-                  <td className="num">{rows.indexOf(r) + 1}</td>
-                  <td>{fmtDateTime(r.created_at)}</td>
+                <tr key={r.id} className={r.checked_in_at ? 'is-in' : ''}>
+                  <td className="num">{no(r)}</td>
+                  <td>
+                    <button className={`a-att ${r.checked_in_at ? 'in' : ''}`} disabled={pending[r.id]} onClick={() => toggleCheckin(r)}
+                      title={r.checked_in_at ? 'Klik untuk batalkan check-in' : 'Klik untuk tandai hadir manual'}>
+                      {r.checked_in_at ? `✅ Hadir ${timeOnly(r.checked_in_at)}` : '○ Belum'}
+                    </button>
+                  </td>
                   {event.fields.map((f) => <td key={f.id}>{answerText(r.answers[f.id])}</td>)}
-                  <td><button className="a-btn xs danger" onClick={() => remove(r)}>Hapus</button></td>
+                  <td className="muted">{fmtDateTime(r.created_at)}</td>
+                  {emailField && (
+                    <td>
+                      {r.email_sent_at
+                        ? <span className="a-mail ok" title={fmtDateTime(r.email_sent_at)}>✓ Terkirim</span>
+                        : r.answers?.[emailField.id] ? <span className="a-mail no">Belum</span> : <span className="muted">—</span>}
+                    </td>
+                  )}
+                  <td>
+                    <div className="actions nowrap">
+                      {emailField && r.answers?.[emailField.id] && (
+                        <button className="a-btn xs" disabled={pending[r.id] || !data.mail_enabled} onClick={() => resend(r)} title="Kirim ulang email tiket">📧</button>
+                      )}
+                      <button className="a-btn xs danger" disabled={pending[r.id]} onClick={() => remove(r)}>Hapus</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={event.fields.length + 3} className="empty">Belum ada pendaftar.</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={event.fields.length + 5} className="empty">Tidak ada data.</td></tr>}
             </tbody>
           </table>
         </div>

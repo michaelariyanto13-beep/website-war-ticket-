@@ -182,3 +182,25 @@ h1, h2, h3 { font-family: 'Outfit', sans-serif; }
 .w-full-msg h2 { font-size: 1.2rem; margin-top: 1rem; }
 .w-full-msg h3 { font-size: 1.05rem; }
 .w-closed > b { display: block; font-family: 'Outfit', sans-serif; font-size: 1.2rem; margin: .3rem 0 .2rem; }
+
+/* ---------- Tiket QR ---------- */
+.w-ticket-body > div:first-child b { font-family: inherit; font-size: 1.05rem; color: inherit; }
+.w-ticket-body .span2 { grid-column: span 2; }
+.w-ticket-qr { display: flex; flex-direction: column; align-items: center; gap: .4rem; padding: 1.5rem 1rem 1.2rem; }
+.w-ticket-qr > b { font-family: 'Outfit', sans-serif; font-size: 2rem; color: var(--acc1); line-height: 1; margin-top: .5rem; }
+.w-ticket-qr small { color: var(--muted); font-size: .8rem; text-align: center; }
+.w-qr { background: #fff; border-radius: 16px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display: grid; place-items: center; box-sizing: content-box; }
+.w-qr img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.w-qr-load { width: 40px; height: 40px; border-radius: 50%; border: 4px solid #e5e7eb; border-top-color: var(--acc1); animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.w-badge-in { display: inline-block; padding: .3rem .8rem; border-radius: 99px; background: rgba(163,230,53,.15); color: var(--lime); font-weight: 600; font-size: .85rem; }
+.w-check.bad { background: #f87171; box-shadow: 0 0 0 10px rgba(248,113,113,.15); }
+.w-mail { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; text-align: left; padding: .8rem 1rem; border-radius: 14px; background: var(--card); border: 1px solid var(--line); margin-bottom: 1.2rem; }
+.w-mail > span { font-size: 1.3rem; }
+.w-mail p { flex: 1; margin: 0; font-size: .9rem; color: #c5cde0; min-width: 200px; }
+.w-mail.sent { border-color: rgba(163,230,53,.35); background: rgba(163,230,53,.08); }
+.w-mail.failed { border-color: rgba(251,146,60,.4); background: rgba(251,146,60,.08); }
+.w-mail.sending p { animation: blink 1.4s ease-in-out infinite; }
+.w-btn.sm { padding: .45rem .9rem; font-size: .85rem; border-radius: 10px; }
+.w-success-actions { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; }
+.w-hint { color: var(--muted); font-size: .78rem; }

@@ -1,6 +1,8 @@
 import { sanitizeRich } from './sanitize.js';
 
-export const FIELD_TYPES = ['text', 'textarea', 'number', 'select', 'radio', 'checkbox'];
+export const FIELD_TYPES = ['text', 'textarea', 'number', 'email', 'select', 'radio', 'checkbox'];
+// Ketat & sederhana (tanpa komentar/quote RFC 5322) agar aman diteruskan ke SMTP
+const EMAIL_RE = /^[a-z0-9._%+-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,24}$/;
 const CHOICE_TYPES = ['select', 'radio', 'checkbox'];
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -79,6 +81,10 @@ export function validateAnswers(fields, answers) {
     } else if (f.type === 'select' || f.type === 'radio') {
       val = str(raw);
       if (val && !f.options.includes(val)) return { error: `Pilihan "${f.label}" tidak valid` };
+      if (f.required && !val) return { error: `"${f.label}" wajib diisi` };
+    } else if (f.type === 'email') {
+      val = str(raw).toLowerCase();
+      if (val && (val.length > 254 || !EMAIL_RE.test(val))) return { error: `"${f.label}" bukan alamat email yang valid` };
       if (f.required && !val) return { error: `"${f.label}" wajib diisi` };
     } else if (f.type === 'number') {
       val = raw === '' || raw === null || raw === undefined ? '' : Number(raw);

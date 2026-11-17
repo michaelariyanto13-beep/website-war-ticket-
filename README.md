@@ -12,9 +12,9 @@ npm run dev:web             # Web  → http://localhost:5173
 
 ## Database (Supabase → SQL Editor)
 
-- Database baru: jalankan `supabase/schema.sql`, `migration-002-performa-keamanan.sql`, lalu `migration-003-pesan-slot-penuh.sql`.
+- Database baru: jalankan `supabase/schema.sql`, `migration-002-performa-keamanan.sql`, `migration-003-pesan-slot-penuh.sql`, lalu `migration-004-tiket-qr-kehadiran.sql`.
 - Database lama: jalankan `supabase/migration-002-performa-keamanan.sql` (jika belum).
-- Lalu jalankan `supabase/migration-003-pesan-slot-penuh.sql`.
+- Lalu jalankan `supabase/migration-003-pesan-slot-penuh.sql`, kemudian `supabase/migration-004-tiket-qr-kehadiran.sql`.
 
 ## Deploy ke Vercel
 
@@ -46,6 +46,23 @@ Region function = `sin1` (Singapura). Buat project Supabase di region **Singapor
 4. **Site configuration → Build & deploy → Functions → Functions region**: pilih
    **Asia Pacific (Singapore)** bila tersedia di paketmu (default-nya US → latensi ke Supabase Singapore lebih tinggi).
 5. Deploy → cek `https://namasitus.netlify.app/api/health` → `{"ok":true}`.
+
+## Email tiket QR (opsional)
+
+Tambahkan Environment Variables berikut (Netlify/Vercel), lalu deploy ulang:
+
+| Nama | Contoh (Gmail) |
+|---|---|
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_USER` | `emailkamu@gmail.com` |
+| `SMTP_PASS` | App Password 16 huruf (Google Account → Security → 2-Step Verification → App passwords) |
+| `MAIL_FROM` | `WarLari <emailkamu@gmail.com>` |
+
+Batas kirim: Gmail ±500 email/hari. Untuk war besar pakai layanan email (Brevo, Resend, Mailgun) — cukup ganti nilai SMTP_*.
+Form event wajib punya isian bertipe **Email** agar tiket terkirim. Tanpa SMTP, QR tetap tampil di layar & di link tiket.
+
+Scan kehadiran: Panel admin → **Scan kehadiran** (buka dari HP, izinkan kamera).
 
 ## Checklist sebelum war besar
 

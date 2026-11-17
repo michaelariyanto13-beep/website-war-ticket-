@@ -5,6 +5,8 @@ import rateLimit from 'express-rate-limit';
 import { supabase } from './supabase.js';
 import { login, requireAdmin } from './auth.js';
 import { validateEventInput, validateAnswers } from './validate.js';
+import { mailEnabled } from './mailer.js';
+import { TICKET_RE, extractCode, deliverTicket, maskEmail } from './tickets.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -38,6 +40,11 @@ const limiterBase = { standardHeaders: true, legacyHeaders: false, message: tooM
 const loginLimiter = rateLimit({ ...limiterBase, windowMs: 15 * 60 * 1000, limit: 10 });
 // Longgar: banyak pengguna seluler berbagi IP (CGNAT). Kuota tetap dijaga database.
 const registerLimiter = rateLimit({ ...limiterBase, windowMs: 60 * 1000, limit: 60 });
+const ticketLimiter = rateLimit({ ...limiterBase, windowMs: 60 * 1000, limit: 30 });
+
+const checkCode = (req, res, next) =>
+  TICKET_RE.test(req.params.code) ? next() : res.status(404).json({ error: 'Tiket tidak ditemukan' });
+const REG_COLS = 'id,event_id,answers,created_at,ticket_code,ticket_no,checked_in_at,email_sent_at';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const checkId = (req, res, next) =>
@@ -114,7 +121,44 @@ app.post('/api/events/:id/register', noStore, registerLimiter, checkId, smallJso
     const [status, msg] = map[result.code] || [400, 'Gagal mendaftar'];
     return res.status(status).json({ error: msg, code: result.code });
   }
-  res.status(201).json({ ok: true, id: result.id, position: result.position });
+  res.status(201).json({ ok: true, id: result.id, position: result.position, ticket_code: result.ticket_code });
+}));
+
+// Tiket online (dibuka dari link email / QR). Hanya info minimal, tanpa data pribadi.
+app.get('/api/tickets/:code', noStore, ticketLimiter, checkCode, wrap(async (req, res) => {
+  const { data: reg, error } = await supabase
+    .from('registrations').select('event_id,ticket_no,ticket_code,checked_in_at,created_at')
+    .eq('ticket_code', req.params.code).maybeSingle();
+  if (error) throw error;
+  if (!reg) return res.status(404).json({ error: 'Tiket tidak ditemukan' });
+  const { data: event, error: eErr } = await supabase
+    .from('events').select('id,title,event_date,location').eq('id', reg.event_id).single();
+  if (eErr) throw eErr;
+  const { event_id: _omit, ...ticket } = reg;
+  res.json({ ...ticket, event });
+}));
+
+// Kirim email tiket — dipanggil halaman sukses SETELAH pendaftaran (jalur daftar tetap cepat).
+// Hanya bisa sekali per tiket (anti-spam); kirim ulang hanya lewat admin.
+app.post('/api/tickets/:code/email', noStore, ticketLimiter, checkCode, wrap(async (req, res) => {
+  if (!mailEnabled) return res.status(503).json({ error: 'Pengiriman email belum diaktifkan', code: 'MAIL_DISABLED' });
+  const { data: reg, error } = await supabase
+    .from('registrations').update({ email_sent_at: new Date().toISOString() })
+    .eq('ticket_code', req.params.code).is('email_sent_at', null)
+    .select(REG_COLS).maybeSingle();
+  if (error) throw error;
+  if (!reg) return res.json({ ok: true, already: true });
+
+  const release = () => supabase.from('registrations').update({ email_sent_at: null }).eq('id', reg.id);
+  try {
+    const to = await deliverTicket(req, reg);
+    if (!to) { await release(); return res.json({ ok: false, code: 'NO_EMAIL' }); }
+    res.json({ ok: true, to: maskEmail(to) });
+  } catch (e) {
+    console.error('Email gagal:', e.message);
+    await release();
+    res.status(502).json({ error: 'Email gagal terkirim, simpan QR di layar ini', code: 'MAIL_FAILED' });
+  }
 }));
 
 // ---------- ADMIN ----------
@@ -178,7 +222,7 @@ admin.get('/events/:id/recap', wrap(async (req, res) => {
   const registrations = [];
   for (let from = 0; ; from += 1000) {
     const { data, error: rErr } = await supabase
-      .from('registrations').select('id,answers,created_at')
+      .from('registrations').select(REG_COLS)
       .eq('event_id', event.id)
       .order('created_at', { ascending: true }).order('id', { ascending: true })
       .range(from, from + 999);
@@ -186,7 +230,104 @@ admin.get('/events/:id/recap', wrap(async (req, res) => {
     registrations.push(...data);
     if (data.length < 1000) break;
   }
-  res.json({ event: shape(event), registrations });
+  res.json({ event: shape(event), registrations, mail_enabled: mailEnabled });
+}));
+
+// ----- Kehadiran (scan QR) -----
+const countCheckedIn = async (eventId) => {
+  const { count, error } = await supabase.from('registrations')
+    .select('id', { count: 'exact', head: true }).eq('event_id', eventId).not('checked_in_at', 'is', null);
+  if (error) throw error;
+  return count ?? 0;
+};
+
+admin.post('/checkin', wrap(async (req, res) => {
+  const code = extractCode(req.body?.code);
+  if (!code) return res.status(400).json({ status: 'invalid', error: 'QR bukan tiket WarLari' });
+
+  const { data: reg, error } = await supabase.from('registrations').select(REG_COLS).eq('ticket_code', code).maybeSingle();
+  if (error) throw error;
+  if (!reg) return res.status(404).json({ status: 'invalid', error: 'Tiket tidak ditemukan' });
+
+  const { data: event, error: eErr } = await supabase
+    .from('events').select('id,title,fields,registered_count').eq('id', reg.event_id).single();
+  if (eErr) throw eErr;
+
+  const base = { event: { id: event.id, title: event.title, fields: event.fields }, registration: reg };
+  const wanted = req.body?.event_id;
+  if (wanted && wanted !== reg.event_id) {
+    return res.status(409).json({ ...base, status: 'wrong_event', error: `Tiket ini untuk event "${event.title}"` });
+  }
+
+  // Update bersyarat: aman walau 2 panitia scan QR yang sama bersamaan
+  const { data: updated, error: uErr } = await supabase.from('registrations')
+    .update({ checked_in_at: new Date().toISOString() })
+    .eq('id', reg.id).is('checked_in_at', null).select(REG_COLS).maybeSingle();
+  if (uErr) throw uErr;
+
+  const stats = { checked_in: await countCheckedIn(event.id), registered: event.registered_count };
+  if (!updated) return res.json({ ...base, status: 'already', stats });
+  res.json({ ...base, registration: updated, status: 'ok', stats });
+}));
+
+admin.patch('/registrations/:id/checkin', wrap(async (req, res) => {
+  const { data, error } = await supabase.from('registrations')
+    .update({ checked_in_at: req.body?.checked_in ? new Date().toISOString() : null })
+    .eq('id', req.params.id).select(REG_COLS).maybeSingle();
+  if (error) throw error;
+  if (!data) return res.status(404).json({ error: 'Pendaftar tidak ditemukan' });
+  res.json(data);
+}));
+
+// ----- Email tiket (admin) -----
+admin.post('/registrations/:id/email', wrap(async (req, res) => {
+  if (!mailEnabled) return res.status(503).json({ error: 'SMTP belum dikonfigurasi di Environment Variables' });
+  const { data: reg, error } = await supabase.from('registrations').select(REG_COLS).eq('id', req.params.id).maybeSingle();
+  if (error) throw error;
+  if (!reg) return res.status(404).json({ error: 'Pendaftar tidak ditemukan' });
+  try {
+    const to = await deliverTicket(req, reg);
+    if (!to) return res.status(400).json({ error: 'Peserta ini tidak mengisi email' });
+    const { data } = await supabase.from('registrations')
+      .update({ email_sent_at: new Date().toISOString() }).eq('id', reg.id).select(REG_COLS).single();
+    res.json({ ok: true, to, registration: data });
+  } catch (e) {
+    console.error('Email gagal:', e.message);
+    res.status(502).json({ error: `Email gagal terkirim: ${e.message}` });
+  }
+}));
+
+// Kirim email yang tertunda per batch kecil (batas waktu function ±10 detik)
+admin.post('/events/:id/email-pending', wrap(async (req, res) => {
+  if (!mailEnabled) return res.status(503).json({ error: 'SMTP belum dikonfigurasi di Environment Variables' });
+  const started = Date.now();
+  const { data: event, error: eErr } = await supabase.from('events').select('fields').eq('id', req.params.id).maybeSingle();
+  if (eErr) throw eErr;
+  if (!event) return res.status(404).json({ error: 'Event tidak ditemukan' });
+  const emailField = event.fields.find((f) => f.type === 'email');
+  if (!emailField) return res.status(400).json({ error: 'Form event ini tidak punya isian bertipe Email' });
+
+  // Hanya peserta yang mengisi email & belum terkirim
+  const pending = (cols, opts) => supabase.from('registrations').select(cols, opts)
+    .eq('event_id', req.params.id).is('email_sent_at', null)
+    .not(`answers->>${emailField.id}`, 'is', null).neq(`answers->>${emailField.id}`, '');
+
+  const { data: regs, error } = await pending(REG_COLS).order('created_at').limit(8);
+  if (error) throw error;
+  let sent = 0, failed = 0;
+  for (const reg of regs) {
+    if (Date.now() - started > 6500) break;
+    try {
+      await deliverTicket(req, reg);
+      await supabase.from('registrations').update({ email_sent_at: new Date().toISOString() }).eq('id', reg.id);
+      sent++;
+    } catch (e) {
+      console.error('Email gagal:', e.message);
+      failed++;
+    }
+  }
+  const { count: remaining } = await pending('id', { count: 'exact', head: true });
+  res.json({ sent, failed, remaining: remaining ?? 0 });
 }));
 
 admin.delete('/registrations/:id', wrap(async (req, res) => {

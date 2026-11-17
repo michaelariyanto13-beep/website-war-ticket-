@@ -27,6 +27,7 @@ async function request(method, path, body, auth = false) {
     const err = new Error(data.error || `Error ${res.status}`);
     err.status = res.status;
     err.code = data.code;
+    err.data = data;
     throw err;
   }
   return data;
@@ -37,6 +38,8 @@ export const api = {
   listEvents: () => request('GET', '/events'),
   getEvent: (id) => request('GET', `/events/${id}`),
   register: (id, answers) => request('POST', `/events/${id}/register`, { answers }),
+  ticket: (code) => request('GET', `/tickets/${code}`),
+  sendTicketEmail: (code) => request('POST', `/tickets/${code}/email`, {}),
   // admin
   login: (username, password) => request('POST', '/admin/login', { username, password }),
   adminEvents: () => request('GET', '/admin/events', undefined, true),
@@ -46,4 +49,8 @@ export const api = {
   deleteEvent: (id) => request('DELETE', `/admin/events/${id}`, undefined, true),
   recap: (id) => request('GET', `/admin/events/${id}/recap`, undefined, true),
   deleteRegistration: (id) => request('DELETE', `/admin/registrations/${id}`, undefined, true),
+  checkin: (code, event_id) => request('POST', '/admin/checkin', { code, event_id }, true),
+  setCheckin: (id, checked_in) => request('PATCH', `/admin/registrations/${id}/checkin`, { checked_in }, true),
+  resendEmail: (id) => request('POST', `/admin/registrations/${id}/email`, {}, true),
+  emailPending: (eventId) => request('POST', `/admin/events/${eventId}/email-pending`, {}, true),
 };

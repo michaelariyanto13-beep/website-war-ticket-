@@ -16,6 +16,7 @@ export default function AdminLayout() {
         <nav className="a-nav">
           <NavLink to="/admin" end><i>📊</i> Dashboard</NavLink>
           <NavLink to="/admin/events/new"><i>➕</i> Buat war baru</NavLink>
+          <NavLink to="/admin/scan"><i>📷</i> Scan kehadiran</NavLink>
           <a href="/" target="_blank" rel="noreferrer"><i>🌐</i> Lihat website</a>
         </nav>
         <button className="a-logout" onClick={logout}><i>⎋</i> Keluar</button>
